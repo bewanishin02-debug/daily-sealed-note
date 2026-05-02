@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Daily Sealed Note</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#f5f2ee">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Sealed Note">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Lato:wght@300;400&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #f5f2ee;
+      --text:    #1a1a18;
+      --muted:   #9a9690;
+      --faint:   #c8c4be;
+      --fainter: #b0aca6;
+      --border:  rgba(0,0,0,0.15);
+      --serif:   'IM Fell English', Georgia, serif;
+      --sans:    'Lato', sans-serif;
+    }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-weight: 300;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    #waves {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      z-index: 0; opacity: 0.32;
+      pointer-events: none;
+    }
+    #app {
+      position: relative; z-index: 1;
+      width: 100%; max-width: 520px;
+      padding: 2rem 2rem 4rem;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 2rem;
+      max-height: 100vh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ── TYPE ── */
+    .label {
+      font-family: var(--sans);
+      font-size: 10px; font-weight: 400;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .serif-msg {
+      font-family: var(--serif);
+      font-size: clamp(1.1rem, 4.5vw, 1.45rem);
+      color: var(--text); text-align: center;
+      line-height: 1.75; max-width: 320px;
+    }
+    .serif-msg em { font-style: italic; color: var(--muted); }
+
+    /* ── COUNTDOWN ── */
+    .countdown-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.45rem; }
+    .countdown-clock {
+      font-family: var(--sans); font-weight: 300;
+      font-size: clamp(2rem, 7vw, 2.6rem);
+      color: var(--fainter); letter-spacing: 0.14em;
+      font-variant-numeric: tabular-nums;
+      transition: color 0.6s;
+    }
+    .countdown-clock.soon { color: #c08878; }
+
+    /* ── NOTE CARD ── */
+    .note-card {
+      width: min(300px, 84vw);
+      aspect-ratio: 2 / 3;
+      border-radius: 3px;
+      display: flex; flex-direction: column;
+      padding: 1.5rem 1.4rem 1.1rem; gap: 0.9rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08), 0 6px 28px rgba(0,0,0,0.09);
+      transition: background 0.25s; flex-shrink: 0;
+    }
+    .note-card textarea {
+      flex: 1; background: transparent;
+      border: none; outline: none; resize: none;
+      font-family: var(--serif);
+      font-size: max(15px, 1em);
+      line-height: 1.9; color: var(--text);
+      caret-color: rgba(0,0,0,0.35);
+      -webkit-appearance: none; width: 100%;
+    }
+    .note-card textarea::placeholder { color: rgba(0,0,0,0.18); }
+    .card-footer {
+      display: flex; align-items: center;
+      justify-content: space-between; flex-shrink: 0;
+    }
+    .counter {
+      font-family: var(--sans); font-size: 11px;
+      color: rgba(0,0,0,0.22); letter-spacing: 0.08em;
+      transition: color 0.3s;
+    }
+    .counter.low { color: rgba(160,55,40,0.55); }
+
+    /* ── SWATCHES ── */
+    .color-picker { display: flex; gap: 6px; align-items: center; }
+    .swatch {
+      width: 15px; height: 15px; border-radius: 50%;
+      cursor: pointer; border: 2px solid transparent;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.14);
+      transition: transform 0.15s, border-color 0.15s;
+      flex-shrink: 0;
+    }
+    .swatch:hover { transform: scale(1.18); }
+    .swatch.active { border-color: rgba(0,0,0,0.38); }
+
+    /* ── BUTTONS ── */
+    .btn {
+      background: transparent; border: 1px solid var(--border);
+      color: rgba(0,0,0,0.38); font-family: var(--sans);
+      font-weight: 300; font-size: 12px; letter-spacing: 0.18em;
+      text-transform: uppercase; padding: 0.7rem 2.2rem;
+      cursor: pointer; transition: border-color 0.25s, color 0.25s;
+      -webkit-appearance: none; border-radius: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn:hover, .btn:focus { border-color: rgba(0,0,0,0.38); color: rgba(0,0,0,0.72); outline: none; }
+    .btn:active { opacity: 0.65; }
+    .btn-choice {
+      width: 100%; text-align: center;
+      padding: 0.9rem 1.5rem;
+      border-color: var(--faint); color: var(--muted);
+    }
+    .btn-choice:hover { border-color: rgba(0,0,0,0.3); color: var(--text); }
+    .choice-stack { display: flex; flex-direction: column; gap: 0.9rem; width: 100%; max-width: 290px; }
+
+    /* ── REVEALED NOTE ── */
+    .revealed-note {
+      width: min(268px, 80vw); aspect-ratio: 2 / 3;
+      border-radius: 3px; display: flex; flex-direction: column;
+      padding: 1.3rem 1.25rem 1rem; gap: 0.7rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08), 0 6px 28px rgba(0,0,0,0.09);
+      flex-shrink: 0;
+    }
+    .revealed-stamp {
+      font-family: var(--sans); font-size: 9px;
+      letter-spacing: 0.2em; text-transform: uppercase;
+      color: rgba(0,0,0,0.26); flex-shrink: 0;
+    }
+    .revealed-body {
+      font-family: var(--serif); font-style: italic;
+      font-size: 0.96rem; line-height: 1.9;
+      color: rgba(0,0,0,0.68); flex: 1; overflow: hidden;
+    }
+
+    /* ── MISSED NOTE ── */
+    .missed-note {
+      width: min(268px, 80vw); aspect-ratio: 2 / 3;
+      border-radius: 3px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 0.6rem;
+      background: #ece8e2;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05), 0 6px 28px rgba(0,0,0,0.06);
+      flex-shrink: 0;
+    }
+    .missed-note .missed-stamp {
+      font-family: var(--sans); font-size: 9px;
+      letter-spacing: 0.2em; text-transform: uppercase;
+      color: rgba(0,0,0,0.22); text-align: center;
+    }
+    .missed-note .missed-msg {
+      font-family: var(--serif); font-style: italic;
+      font-size: 1rem; color: rgba(0,0,0,0.28);
+      text-align: center; line-height: 1.7;
+    }
+
+    /* ── DEBUG ── */
+    #debug {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #edeae5; border-top: 1px solid #ddd9d3;
+      padding: 0.45rem 1rem;
+      display: flex; align-items: center;
+      justify-content: space-between; gap: 0.75rem;
+      z-index: 100; font-family: var(--sans);
+      font-size: 10px; color: #aaa8a3; flex-wrap: wrap;
+    }
+    #debug-info { display: flex; gap: 0.9rem; flex-wrap: wrap; }
+    .dbtn {
+      background: transparent; border: 1px solid #ccc9c3;
+      color: #9a9690; font-family: var(--sans);
+      font-size: 10px; letter-spacing: 0.1em;
+      padding: 0.28rem 0.75rem; cursor: pointer;
+      text-transform: uppercase; -webkit-appearance: none;
+      border-radius: 0; -webkit-tap-highlight-color: transparent;
+    }
+    .dbtn:hover { border-color: #9a9690; color: #555; }
+
+    /* ── ANIMATIONS ── */
+    .fade-in { animation: fadeUp 0.65s ease both; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(7px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); border: 0;
+    }
+  </style>
+</head>
+<body>
+<h1 class="sr-only">Daily Sealed Note</h1>
+<canvas id="waves"></canvas>
+<div id="app"></div>
+<div id="debug">
+  <div id="debug-info"></div>
+  <div style="display:flex;gap:0.5rem;">
+    <button class="dbtn" id="btn-advance">+ advance day</button>
+    <button class="dbtn" id="btn-reset">reset all</button>
+  </div>
+</div>
+
+<script>
+  // ── CONFIG ────────────────────────────────────────────────────────────────
+  const UNLOCK_DAYS = 365;
+  const MAX_CHARS   = 200;
+  const S_ENTRIES   = 'dsn_entries_v4';
+  const S_COLOR     = 'dsn_color_v1';
+
+  const COLORS = [
+    { name: 'cream',    bg: '#fdf6e3' },
+    { name: 'rose',     bg: '#f9e8e8' },
+    { name: 'sage',     bg: '#e8f0e8' },
+    { name: 'sky',      bg: '#e8f2f9' },
+    { name: 'lavender', bg: '#ede8f5' },
+    { name: 'sand',     bg: '#f2ece0' },
+    { name: 'white',    bg: '#ffffff' },
+  ];
+
+  let selectedColor = localStorage.getItem(S_COLOR) || 'cream';
+  let _lastDay      = null;
+  let _heartbeat    = null;
+
+  // ── TIME — anchored to local midnight, timezone-safe ─────────────────────
+  // Days are identified by local YYYY-MM-DD strings, so the reset always
+  // happens at the user's local midnight regardless of timezone or DST.
+
+  function localDateStr(d) {
+    d = d || new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  function todayStr() { return localDateStr(new Date()); }
+
+  // ms until the next local midnight
+  function msToNextDay() {
+    const now  = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+    return next - now;
+  }
+
+  // Add n calendar days to a YYYY-MM-DD string
+  function addDays(dateStr, n) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return localDateStr(new Date(y, m - 1, d + n));
+  }
+
+  // How many calendar days between two YYYY-MM-DD strings
+  function daysBetween(aStr, bStr) {
+    const [ay, am, ad] = aStr.split('-').map(Number);
+    const [by, bm, bd] = bStr.split('-').map(Number);
+    const a = new Date(ay, am - 1, ad);
+    const b = new Date(by, bm - 1, bd);
+    return Math.round((b - a) / 86400000);
+  }
+
+  function fmtCountdown(ms) {
+    if (ms <= 0) return '00:00:00';
+    const s   = Math.floor(ms / 1000);
+    const h   = Math.floor(s / 3600);
+    const min = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  }
+  function fmtTime(ts) {
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+  }
+  function fmtDate(ts) {
+    return new Date(ts).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+  // Parse a YYYY-MM-DD string for display without timezone shift
+  function fmtDateStr(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
+  // ── DATA ──────────────────────────────────────────────────────────────────
+  function getEntries() {
+    try { return JSON.parse(localStorage.getItem(S_ENTRIES) || '[]'); }
+    catch(e) { return []; }
+  }
+  function saveEntries(arr) { localStorage.setItem(S_ENTRIES, JSON.stringify(arr)); }
+  function colorObj(name)   { return COLORS.find(c => c.name === name) || COLORS[0]; }
+  function wroteToday()     { return getEntries().some(e => e.dateStr === todayStr()); }
+
+  function activeBatch() {
+    const entries  = getEntries();
+    const today    = todayStr();
+    const unlocked = entries.filter(e => e.unlockDateStr <= today);
+    if (!unlocked.length) return null;
+    // Group by how many years ago (each year = UNLOCK_DAYS calendar days)
+    const map = {};
+    unlocked.forEach(e => {
+      const diff  = daysBetween(e.dateStr, today);
+      const cycle = Math.max(1, Math.round(diff / UNLOCK_DAYS));
+      if (!map[cycle]) map[cycle] = [];
+      map[cycle].push(e);
+    });
+    const min = Math.min(...Object.keys(map).map(Number));
+    return { cycle: min, entries: map[min] };
+  }
+
+  function missedDaysForBatch(batch) {
+    // For the cycle slot, check if any days in that batch window had no entry
+    const entries = getEntries();
+    const today   = todayStr();
+    const missed  = [];
+    batch.entries.forEach(e => {
+      // The slot this entry occupies — just verify the entry exists (it does).
+      // Check the day BEFORE it in the same cycle window if it was skipped.
+    });
+    // Simpler: find the date that SHOULD have unlocked this cycle but has no entry
+    const slotDateStr = addDays(today, -(batch.cycle * UNLOCK_DAYS));
+    const hasEntry    = entries.some(e => e.dateStr === slotDateStr);
+    if (!hasEntry && slotDateStr < today) missed.push(slotDateStr);
+    return missed;
+  }
+
+  function yearLabel(cycle) { return cycle === 1 ? 'from 1 year ago' : `from ${cycle} years ago`; }
+
+  // ── HEARTBEAT ─────────────────────────────────────────────────────────────
+  // Only ticks the clock element and re-renders on day change.
+  // Never interrupts user navigation.
+  function startHeartbeat() {
+    if (_heartbeat) clearInterval(_heartbeat);
+    _lastDay   = todayStr();
+    _heartbeat = setInterval(() => {
+      const clock = document.getElementById('hb-clock');
+      if (clock) {
+        const ms = msToNextDay();
+        clock.textContent = fmtCountdown(ms);
+        clock.classList.toggle('soon', ms < 3600000);
+      }
+      const nowDay = todayStr();
+      if (nowDay !== _lastDay) {
+        _lastDay = nowDay;
+        render();
+      }
+      updateDebug();
+    }, 1000);
+  }
+
+  // ── DEBUG ─────────────────────────────────────────────────────────────────
+  function updateDebug() {
+    const entries = getEntries();
+    document.getElementById('debug-info').innerHTML =
+      `<span>today: ${todayStr()}</span>` +
+      `<span>${entries.length} entries</span>` +
+      `<span>unlock after ${UNLOCK_DAYS} days</span>`;
+  }
+
+  document.getElementById('btn-advance').addEventListener('click', () => {
+    // Inject a fake entry dated yesterday so we can test unlock flow
+    const entries  = getEntries();
+    const yesterday = addDays(todayStr(), -1);
+    if (!entries.some(e => e.dateStr === yesterday)) {
+      entries.push({
+        text: '[debug entry]',
+        createdAt:    Date.now(),
+        dateStr:      yesterday,
+        unlockDateStr: todayStr(), // unlocks immediately
+        color:        'cream'
+      });
+      saveEntries(entries);
+    }
+    _lastDay = todayStr();
+    render();
+  });
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    localStorage.removeItem(S_ENTRIES);
+    _lastDay = todayStr();
+    render();
+  });
+
+  // ── COLOR PICKER ──────────────────────────────────────────────────────────
+  function buildPicker(onChange) {
+    const wrap = document.createElement('div');
+    wrap.className = 'color-picker';
+    COLORS.forEach(c => {
+      const sw = document.createElement('div');
+      sw.className = 'swatch' + (c.name === selectedColor ? ' active' : '');
+      sw.style.background = c.bg;
+      sw.title = c.name;
+      sw.addEventListener('click', () => {
+        selectedColor = c.name;
+        localStorage.setItem(S_COLOR, selectedColor);
+        wrap.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+        sw.classList.add('active');
+        onChange(c);
+      });
+      wrap.appendChild(sw);
+    });
+    return wrap;
+  }
+
+  // ── DOM HELPERS ───────────────────────────────────────────────────────────
+  function el(tag, cls, style, text) {
+    const e = document.createElement(tag);
+    if (cls)                e.className     = cls;
+    if (style)              e.style.cssText = style;
+    if (text !== undefined) e.textContent   = text;
+    return e;
+  }
+  function append(parent, ...kids) { kids.forEach(k => parent.appendChild(k)); }
+  function setApp(node) {
+    const a = document.getElementById('app');
+    a.innerHTML = '';
+    a.appendChild(node);
+  }
+
+  // ── SCREEN: home ──────────────────────────────────────────────────────────
+  // Shown on first open, and after resealing any note.
+  function showHome(onWrite) {
+    const wrap = el('div', 'fade-in', 'display:flex;flex-direction:column;align-items:center;gap:2.2rem;text-align:center;');
+
+    const title = el('p', 'serif-msg');
+    title.innerHTML = 'Daily Sealed Note.';
+
+    const sub = el('div', 'label', 'margin-top:-0.5rem;', fmtDate(Date.now()));
+
+    const writeBtn = el('button', 'btn', '', "write today's note");
+    writeBtn.addEventListener('click', () => {
+      if (typeof onWrite === 'function') onWrite();
+    });
+
+    append(wrap, title, sub, writeBtn);
+    setApp(wrap);
+  }
+
+  // ── SCREEN: write ─────────────────────────────────────────────────────────
+  function showWrite(onSeal) {
+    const col  = colorObj(selectedColor);
+    const wrap = el('div', 'fade-in', 'width:100%;display:flex;flex-direction:column;align-items:center;gap:1.6rem;');
+
+    append(wrap, el('div', 'label', '', fmtDate(Date.now())));
+
+    const card = el('div', 'note-card');
+    card.style.background = col.bg;
+
+    const ta = document.createElement('textarea');
+    ta.maxLength = MAX_CHARS;
+    ta.placeholder = 'whatever you want...';
+    ta.setAttribute('autocomplete', 'off');
+    ta.setAttribute('autocorrect',  'off');
+    ta.setAttribute('spellcheck',   'false');
+    card.appendChild(ta);
+
+    const footer  = el('div', 'card-footer');
+    const counter = el('div', 'counter', '', String(MAX_CHARS));
+    const picker  = buildPicker(newCol => { card.style.background = newCol.bg; });
+    append(footer, picker, counter);
+    card.appendChild(footer);
+    wrap.appendChild(card);
+
+    const sealBtn = el('button', 'btn', '', 'seal');
+    wrap.appendChild(sealBtn);
+    setApp(wrap);
+
+    ta.addEventListener('input', () => {
+      const rem = MAX_CHARS - ta.value.length;
+      counter.textContent = rem;
+      counter.classList.toggle('low', rem < 30);
+    });
+
+    sealBtn.addEventListener('click', () => {
+      const text = ta.value.trim();
+      if (!text) return;
+      const entries = getEntries();
+      const today   = todayStr();
+      entries.push({
+        text,
+        createdAt:    Date.now(),
+        dateStr:      today,
+        unlockDateStr: addDays(today, UNLOCK_DAYS),
+        color:        selectedColor
+      });
+      saveEntries(entries);
+      if (typeof onSeal === 'function') onSeal();
+      else showSealed();
+    });
+
+    setTimeout(() => ta.focus(), 50);
+  }
+
+  // ── SCREEN: sealed ────────────────────────────────────────────────────────
+  function showSealed() {
+    const ms   = msToNextDay();
+    const wrap = el('div', 'fade-in', 'display:flex;flex-direction:column;align-items:center;gap:2rem;text-align:center;');
+    const cw   = el('div', 'countdown-wrap');
+    const clk  = el('div', 'countdown-clock', '', fmtCountdown(ms));
+    clk.id = 'hb-clock';
+    clk.classList.toggle('soon', ms < 60000);
+    append(cw, el('div', 'label', '', 'next entry opens in'), clk);
+    append(wrap, el('p', 'serif-msg', '', 'See you tomorrow.'), cw);
+    setApp(wrap);
+  }
+
+  // ── SCREEN: choice ────────────────────────────────────────────────────────
+  function showChoice(batch) {
+    const { cycle } = batch;
+    const yrs  = cycle === 1 ? '1 year ago' : `${cycle} years ago`;
+    const wrap = el('div', 'fade-in', 'width:100%;display:flex;flex-direction:column;align-items:center;gap:2.4rem;');
+
+    const msg = el('p', 'serif-msg');
+    msg.innerHTML = `You wrote something <em>${yrs}.</em><br>What would you like to do first?`;
+
+    const stack    = el('div', 'choice-stack');
+    const openBtn  = el('button', 'btn btn-choice', '', 'open the note');
+    const writeBtn = el('button', 'btn btn-choice', '', "write today's entry first");
+
+    // Path A: open note → reseal → home → write → seal → sealed
+    openBtn.addEventListener('click', () => {
+      showReveal(batch, () => showHome(() => showWrite(() => showSealed())));
+    });
+
+    // Path B: home → write → seal → show old note → reseal → sealed
+    writeBtn.addEventListener('click', () => {
+      showHome(() => showWrite(() => showReveal(batch, () => showSealed())));
+    });
+
+    append(stack, openBtn, writeBtn);
+    append(wrap, el('div', 'label', '', 'a note has surfaced'), msg, stack);
+    setApp(wrap);
+  }
+
+  // ── SCREEN: reveal ────────────────────────────────────────────────────────
+  function showReveal(batch, onReseal) {
+    const { cycle, entries } = batch;
+
+    // Check for missed days in this cycle slot
+    const missed = missedDaysForBatch(batch);
+
+    const wrap = el('div', 'fade-in', 'width:100%;display:flex;flex-direction:column;align-items:center;gap:1.6rem;');
+    append(wrap, el('div', 'label', '', yearLabel(cycle)));
+
+    // Render real entries
+    entries.forEach(entry => {
+      const col  = colorObj(entry.color || 'cream');
+      const note = el('div', 'revealed-note');
+      note.style.background = col.bg;
+      const stamp = el('div', 'revealed-stamp', '', `${fmtDate(entry.createdAt)} · ${fmtTime(entry.createdAt)}`);
+      const body  = el('div', 'revealed-body');
+      body.textContent = entry.text;
+      append(note, stamp, body);
+      wrap.appendChild(note);
+    });
+
+    // Render missed day placeholders
+    missed.forEach(dateStr => {
+      const note  = el('div', 'missed-note');
+      const stamp = el('div', 'missed-stamp', '', fmtDateStr(dateStr));
+      const msg   = el('div', 'missed-msg',   '', 'no note today :(');
+      append(note, stamp, msg);
+      wrap.appendChild(note);
+    });
+
+    const resealBtn = el('button', 'btn', '', 'reseal');
+    resealBtn.addEventListener('click', () => {
+      if (typeof onReseal === 'function') onReseal();
+      else showSealed();
+    });
+    wrap.appendChild(resealBtn);
+    setApp(wrap);
+  }
+
+  // ── ROOT RENDER ───────────────────────────────────────────────────────────
+  // Called on boot, day change, and debug buttons only.
+  function render() {
+    const batch    = activeBatch();
+    const hasWrote = wroteToday();
+
+    if (batch && !hasWrote) { showChoice(batch); return; }
+    if (hasWrote)           { showSealed();       return; }
+    showHome(() => showWrite(() => showSealed()));
+  }
+
+  // ── WAVES ─────────────────────────────────────────────────────────────────
+  function initWaves() {
+    const canvas = document.getElementById('waves');
+    const ctx    = canvas.getContext('2d');
+    let t = 0;
+    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    resize();
+    window.addEventListener('resize', resize);
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < 5; i++) {
+        const baseY = canvas.height / 6 * (i + 1);
+        const amp   = 3.5 + i * 1.1;
+        const freq  = 0.006 + i * 0.0009;
+        const speed = 0.28 + i * 0.07;
+        ctx.beginPath();
+        ctx.strokeStyle = '#72d6f0';
+        ctx.lineWidth   = 0.75;
+        ctx.globalAlpha = 0.52 - i * 0.06;
+        for (let x = 0; x <= canvas.width; x += 2) {
+          const y = baseY
+            + Math.sin(x * freq + t * speed) * amp
+            + Math.sin(x * freq * 0.48 + t * speed * 0.72) * amp * 0.38;
+          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      t += 0.014;
+      requestAnimationFrame(draw);
+    }
+    draw();
+  }
+
+  // ── SERVICE WORKER ────────────────────────────────────────────────────────
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/daily-sealed-note/sw.js').catch(() => {});
+    });
+  }
+
+  // ── BOOT ──────────────────────────────────────────────────────────────────
+  initWaves();
+  render();
+  startHeartbeat();
+  updateDebug();</script>
+</body>
+</html>
